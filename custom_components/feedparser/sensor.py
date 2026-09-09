@@ -6,7 +6,7 @@ import email.utils
 import logging
 import re
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING, Protocol, cast
 
 import feedparser  # type: ignore[import]
@@ -17,10 +17,12 @@ from dateutil import parser
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import CONF_NAME
 from homeassistant.helpers.entity_platform import async_get_current_platform
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.util import dt
 from requests_file import FileAdapter
 
 from .const import (
+    CONF_DAILY_UPDATE_TIME,
     CONF_DATE_FORMAT,
     CONF_EXCLUSIONS,
     CONF_FEED_URL,
@@ -141,26 +143,24 @@ async def async_setup_entry(
     current_platform.scan_interval = scan_interval
     current_platform.scan_interval_seconds = scan_interval.total_seconds()
 
-    async_add_entities(
-        [
-            FeedParserSensor(
-                feed=data[CONF_FEED_URL],
-                name=data[CONF_NAME],
-                date_format=data.get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT),
-                show_topn=data.get(CONF_SHOW_TOPN, DEFAULT_TOPN),
-                remove_summary_image=data.get(
-                    CONF_REMOVE_SUMMARY_IMAGE,
-                    DEFAULT_REMOVE_SUMMARY_IMAGE,
-                ),
-                inclusions=data.get(CONF_INCLUSIONS, []),
-                exclusions=data.get(CONF_EXCLUSIONS, []),
-                scan_interval=scan_interval,
-                local_time=data.get(CONF_LOCAL_TIME, DEFAULT_LOCAL_TIME),
-                unique_id=entry.entry_id,
-            ),
-        ],
-        update_before_add=True,
+    sensor = FeedParserSensor(
+        feed=data[CONF_FEED_URL],
+        name=data[CONF_NAME],
+        date_format=data.get(CONF_DATE_FORMAT, DEFAULT_DATE_FORMAT),
+        show_topn=data.get(CONF_SHOW_TOPN, DEFAULT_TOPN),
+        remove_summary_image=data.get(
+            CONF_REMOVE_SUMMARY_IMAGE,
+            DEFAULT_REMOVE_SUMMARY_IMAGE,
+        ),
+        inclusions=data.get(CONF_INCLUSIONS, []),
+        exclusions=data.get(CONF_EXCLUSIONS, []),
+        scan_interval=scan_interval,
+        local_time=data.get(CONF_LOCAL_TIME, DEFAULT_LOCAL_TIME),
+        unique_id=entry.entry_id,
     )
+    sensor.configure_daily_update_time(data.get(CONF_DAILY_UPDATE_TIME))
+
+    async_add_entities([sensor], update_before_add=True)
 
 
 class FeedParserSensor(SensorEntity):
@@ -195,6 +195,7 @@ class FeedParserSensor(SensorEntity):
         self._exclusions = exclusions
         self._scan_interval = scan_interval
         self._local_time = local_time
+        self._daily_update_time: time | None = None
         self._entries: list[dict[str, object]] = []
         self._attr_attribution = "Data retrieved using RSS feedparser"
         _LOGGER.debug("Feed %s: FeedParserSensor initialized - %s", self.name, self)
@@ -212,8 +213,46 @@ class FeedParserSensor(SensorEntity):
             f"remove_summary_image={self._remove_summary_image}, "
             f"inclusions={self._inclusions}, "
             f"exclusions={self._exclusions}, scan_interval={self._scan_interval}, "
+            f"daily_update_time={self._daily_update_time}, "
             f'local_time={self._local_time}, date_format="{self._date_format}")'
         )
+
+    def configure_daily_update_time(self: FeedParserSensor, value: object) -> None:
+        """Configure an optional static daily update time."""
+        daily_update_time: time | None = None
+        if isinstance(value, time):
+            daily_update_time = value.replace(microsecond=0)
+        elif isinstance(value, str) and value:
+            try:
+                daily_update_time = time.fromisoformat(value).replace(microsecond=0)
+            except ValueError:
+                _LOGGER.warning(
+                    "Invalid daily update time %s; using interval polling",
+                    value,
+                )
+
+        self._daily_update_time = daily_update_time
+        self._attr_should_poll = daily_update_time is None
+
+    async def async_added_to_hass(self: FeedParserSensor) -> None:
+        """Schedule the optional static daily refresh."""
+        await super().async_added_to_hass()
+        if self._daily_update_time is None:
+            return
+
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass,
+                self._async_daily_refresh,
+                hour=self._daily_update_time.hour,
+                minute=self._daily_update_time.minute,
+                second=self._daily_update_time.second,
+            ),
+        )
+
+    async def _async_daily_refresh(self: FeedParserSensor, _now: datetime) -> None:
+        """Refresh the feed at the configured local wall-clock time."""
+        await self.async_update_ha_state(force_refresh=True)
 
     def update(self: FeedParserSensor) -> None:
         """Parse the feed and update the state of the sensor."""

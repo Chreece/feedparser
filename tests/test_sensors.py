@@ -278,5 +278,18 @@ def test_image_not_in_entries(feed: FeedSource) -> None:
     )
     feed_sensor.update()
     assert feed_sensor.feed_entries
-    # assert that the sensor does not include the image in its feed entries
+    # assert that the sensor does not include the image in any feed entry
     assert all("image" not in e for e in feed_sensor.feed_entries)
+
+
+def test_daily_update_time_disables_interval_polling(feed: FeedSource) -> None:
+    """Test a configured daily time disables normal interval polling."""
+    sensor = FeedParserSensor(**feed.sensor_config_local_feed)
+    sensor.configure_daily_update_time("06:30:00")
+    assert sensor.should_poll is False
+
+
+def test_without_daily_update_time_keeps_interval_polling(feed: FeedSource) -> None:
+    """Test interval polling remains the default."""
+    sensor = FeedParserSensor(**feed.sensor_config_local_feed)
+    assert sensor.should_poll is True

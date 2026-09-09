@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import time, timedelta
 from typing import Any, cast
 
 import requests
@@ -21,6 +21,7 @@ from requests_file import FileAdapter
 from yarl import URL
 
 from .const import (
+    CONF_DAILY_UPDATE_TIME,
     CONF_DATE_FORMAT,
     CONF_EXCLUSIONS,
     CONF_FEED_URL,
@@ -121,6 +122,27 @@ def _scan_interval_from_input(user_input: Mapping[str, object]) -> dict[str, int
     }
 
 
+def _daily_update_time_from_input(user_input: Mapping[str, object]) -> str | None:
+    """Normalize the optional static daily update time."""
+    value = user_input.get(CONF_DAILY_UPDATE_TIME)
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, time):
+        return value.replace(microsecond=0).isoformat()
+
+    if isinstance(value, str):
+        try:
+            parsed = time.fromisoformat(value)
+        except ValueError as err:
+            msg = "Daily update time is invalid"
+            raise vol.Invalid(msg) from err
+        return parsed.replace(microsecond=0).isoformat()
+
+    msg = "Daily update time is invalid"
+    raise vol.Invalid(msg)
+
+
 def _schema_with_defaults(
     *,
     name: str = DEFAULT_NAME,
@@ -129,6 +151,7 @@ def _schema_with_defaults(
     local_time: bool = DEFAULT_LOCAL_TIME,
     show_topn: int = DEFAULT_TOPN,
     scan_interval: dict[str, int] | None = None,
+    daily_update_time: str | None = None,
     remove_summary_image: bool = DEFAULT_REMOVE_SUMMARY_IMAGE,
     inclusions: str = "",
     exclusions: str = "",
@@ -151,6 +174,11 @@ def _schema_with_defaults(
                 enable_second=False,
             ),
         ),
+        (
+            vol.Optional(CONF_DAILY_UPDATE_TIME, default=daily_update_time)
+            if daily_update_time is not None
+            else vol.Optional(CONF_DAILY_UPDATE_TIME)
+        ): selector.TimeSelector(),
         vol.Required(CONF_SHOW_TOPN, default=show_topn): vol.All(
             selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -199,11 +227,17 @@ class FeedparserConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             feed_url = str(user_input[CONF_FEED_URL]).strip()
             scan_interval: dict[str, int] | None = None
+            daily_update_time: str | None = None
 
             try:
                 scan_interval = _scan_interval_from_input(user_input)
             except vol.Invalid:
                 errors[CONF_SCAN_INTERVAL] = "scan_interval_too_short"
+
+            try:
+                daily_update_time = _daily_update_time_from_input(user_input)
+            except vol.Invalid:
+                errors[CONF_DAILY_UPDATE_TIME] = "invalid_daily_update_time"
 
             try:
                 parsed_url = URL(feed_url)
@@ -234,6 +268,11 @@ class FeedparserConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_DATE_FORMAT: str(user_input[CONF_DATE_FORMAT]).strip(),
                         CONF_LOCAL_TIME: bool(user_input[CONF_LOCAL_TIME]),
                         CONF_SCAN_INTERVAL: scan_interval,
+                        **(
+                            {CONF_DAILY_UPDATE_TIME: daily_update_time}
+                            if daily_update_time is not None
+                            else {}
+                        ),
                         CONF_SHOW_TOPN: _to_int(
                             user_input[CONF_SHOW_TOPN],
                             DEFAULT_TOPN,
@@ -290,15 +329,30 @@ class FeedparserOptionsFlow(OptionsFlowWithReload):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            scan_interval: dict[str, int] | None = None
+            daily_update_time: str | None = None
+
             try:
                 scan_interval = _scan_interval_from_input(user_input)
             except vol.Invalid:
                 errors[CONF_SCAN_INTERVAL] = "scan_interval_too_short"
-            else:
+
+            try:
+                daily_update_time = _daily_update_time_from_input(user_input)
+            except vol.Invalid:
+                errors[CONF_DAILY_UPDATE_TIME] = "invalid_daily_update_time"
+
+            if not errors:
+                assert scan_interval is not None
                 options = {
                     CONF_DATE_FORMAT: str(user_input[CONF_DATE_FORMAT]).strip(),
                     CONF_LOCAL_TIME: bool(user_input[CONF_LOCAL_TIME]),
                     CONF_SCAN_INTERVAL: scan_interval,
+                    **(
+                        {CONF_DAILY_UPDATE_TIME: daily_update_time}
+                        if daily_update_time is not None
+                        else {}
+                    ),
                     CONF_SHOW_TOPN: _to_int(user_input[CONF_SHOW_TOPN], DEFAULT_TOPN),
                     CONF_REMOVE_SUMMARY_IMAGE: bool(
                         user_input[CONF_REMOVE_SUMMARY_IMAGE],
@@ -322,6 +376,11 @@ class FeedparserOptionsFlow(OptionsFlowWithReload):
             local_time=bool(merged.get(CONF_LOCAL_TIME, DEFAULT_LOCAL_TIME)),
             scan_interval=_scan_interval_to_dict(
                 merged.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            ),
+            daily_update_time=(
+                str(merged[CONF_DAILY_UPDATE_TIME])
+                if merged.get(CONF_DAILY_UPDATE_TIME)
+                else None
             ),
             show_topn=int(merged.get(CONF_SHOW_TOPN, DEFAULT_TOPN)),
             remove_summary_image=bool(

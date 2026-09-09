@@ -13,18 +13,20 @@
           "show_topn": "Maximale Einträge",
           "remove_summary_image": "Bild-Tags aus der Zusammenfassung entfernen",
           "inclusions": "Einbezogene Felder",
-          "exclusions": "Ausgeschlossene Felder"
+          "exclusions": "Ausgeschlossene Felder",
+          "daily_update_time": "Zeit für tägliche Aktualisierung"
         },
         "data_description": {
           "name": "Anzeigename für den Sensor.",
           "feed_url": "URL eines RSS- oder Atom-Feeds. HTTP, HTTPS und lokale Datei-URLs werden unterstützt.",
           "date_format": "Python-strftime-Format für Feed-Datumswerte, zum Beispiel `%a, %d %b %Y %H:%M:%S %Z`.",
           "local_time": "Feed-Zeitstempel vor der Formatierung in die in Home Assistant konfigurierte lokale Zeit umwandeln.",
-          "scan_interval": "Wie oft der Feed aktualisiert wird. Das Mindestintervall beträgt 1 Minute.",
+          "scan_interval": "Wie oft der Feed aktualisiert wird, wenn keine tägliche Aktualisierungszeit gesetzt ist. Das Mindestintervall beträgt 1 Minute.",
           "show_topn": "Maximale Anzahl von Einträgen im Attribut `entries`. Große Werte erhöhen die Zustandsgröße.",
           "remove_summary_image": "Entfernt `<img>`-Tags aus dem Feld `summary`. Ein separates Feld `image` wird nicht entfernt.",
           "inclusions": "Optionale, durch Kommas getrennte Positivliste, zum Beispiel `title, link, published`. Leer lassen, um alle Felder außer den ausgeschlossenen beizubehalten.",
-          "exclusions": "Optionale, durch Kommas getrennte Felder, die entfernt werden sollen. Ausschlüsse werden nach den Einschlüssen angewendet."
+          "exclusions": "Optionale, durch Kommas getrennte Felder, die entfernt werden sollen. Ausschlüsse werden nach den Einschlüssen angewendet.",
+          "daily_update_time": "Optional. Wenn eine Uhrzeit gesetzt ist, wird der Feed einmal täglich zu dieser lokalen Home-Assistant-Zeit aktualisiert statt im Aktualisierungsintervall. Leer lassen, um das Intervall zu verwenden."
         }
       }
     },
@@ -32,7 +34,8 @@
       "already_configured": "Dieser Feed ist bereits konfiguriert.",
       "cannot_connect": "Der Feed konnte nicht heruntergeladen werden.",
       "invalid_url": "Die URL ist ungültig.",
-      "scan_interval_too_short": "Das Aktualisierungsintervall muss mindestens 1 Minute betragen."
+      "scan_interval_too_short": "Das Aktualisierungsintervall muss mindestens 1 Minute betragen.",
+      "invalid_daily_update_time": "Die Zeit für die tägliche Aktualisierung ist ungültig."
     },
     "abort": {
       "already_configured": "Dieser Feed ist bereits konfiguriert."
@@ -50,21 +53,24 @@
           "show_topn": "Maximale Einträge",
           "remove_summary_image": "Bild-Tags aus der Zusammenfassung entfernen",
           "inclusions": "Einbezogene Felder",
-          "exclusions": "Ausgeschlossene Felder"
+          "exclusions": "Ausgeschlossene Felder",
+          "daily_update_time": "Zeit für tägliche Aktualisierung"
         },
         "data_description": {
           "date_format": "Python-strftime-Format für Feed-Datumswerte, zum Beispiel `%a, %d %b %Y %H:%M:%S %Z`.",
           "local_time": "Feed-Zeitstempel vor der Formatierung in die in Home Assistant konfigurierte lokale Zeit umwandeln.",
-          "scan_interval": "Wie oft der Feed aktualisiert wird. Das Mindestintervall beträgt 1 Minute.",
+          "scan_interval": "Wie oft der Feed aktualisiert wird, wenn keine tägliche Aktualisierungszeit gesetzt ist. Das Mindestintervall beträgt 1 Minute.",
           "show_topn": "Maximale Anzahl von Einträgen im Attribut `entries`. Große Werte erhöhen die Zustandsgröße.",
           "remove_summary_image": "Entfernt `<img>`-Tags aus dem Feld `summary`. Ein separates Feld `image` wird nicht entfernt.",
           "inclusions": "Optionale, durch Kommas getrennte Positivliste, zum Beispiel `title, link, published`. Leer lassen, um alle Felder außer den ausgeschlossenen beizubehalten.",
-          "exclusions": "Optionale, durch Kommas getrennte Felder, die entfernt werden sollen. Ausschlüsse werden nach den Einschlüssen angewendet."
+          "exclusions": "Optionale, durch Kommas getrennte Felder, die entfernt werden sollen. Ausschlüsse werden nach den Einschlüssen angewendet.",
+          "daily_update_time": "Optional. Wenn eine Uhrzeit gesetzt ist, wird der Feed einmal täglich zu dieser lokalen Home-Assistant-Zeit aktualisiert statt im Aktualisierungsintervall. Leer lassen, um das Intervall zu verwenden."
         }
       }
     },
     "error": {
-      "scan_interval_too_short": "Das Aktualisierungsintervall muss mindestens 1 Minute betragen."
+      "scan_interval_too_short": "Das Aktualisierungsintervall muss mindestens 1 Minute betragen.",
+      "invalid_daily_update_time": "Die Zeit für die tägliche Aktualisierung ist ungültig."
     }
   }
 }
