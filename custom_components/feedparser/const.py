@@ -14,6 +14,7 @@ CONF_INCLUSIONS = "inclusions"
 CONF_EXCLUSIONS = "exclusions"
 CONF_SHOW_TOPN = "show_topn"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_DAILY_UPDATE_TIME = "daily_update_time"
 CONF_REMOVE_SUMMARY_IMAGE = "remove_summary_image"
 
 DEFAULT_DATE_FORMAT = "%a, %b %d %I:%M %p"
