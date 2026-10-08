@@ -124,7 +124,7 @@ async def async_setup_platform(
                 local_time=config[CONF_LOCAL_TIME],
             ),
         ],
-        update_before_add=True,
+        update_before_add=False,
     )
 
 
@@ -160,7 +160,7 @@ async def async_setup_entry(
     )
     sensor.configure_daily_update_time(data.get(CONF_DAILY_UPDATE_TIME))
 
-    async_add_entities([sensor], update_before_add=True)
+    async_add_entities([sensor], update_before_add=False)
 
 
 class FeedParserSensor(SensorEntity):
@@ -235,20 +235,31 @@ class FeedParserSensor(SensorEntity):
         self._attr_should_poll = daily_update_time is None
 
     async def async_added_to_hass(self: FeedParserSensor) -> None:
-        """Schedule the optional static daily refresh."""
+        """Schedule refreshes without blocking Home Assistant startup."""
         await super().async_added_to_hass()
-        if self._daily_update_time is None:
-            return
+        if self._daily_update_time is not None:
+            self.async_on_remove(
+                async_track_time_change(
+                    self.hass,
+                    self._async_daily_refresh,
+                    hour=self._daily_update_time.hour,
+                    minute=self._daily_update_time.minute,
+                    second=self._daily_update_time.second,
+                ),
+            )
 
-        self.async_on_remove(
-            async_track_time_change(
-                self.hass,
-                self._async_daily_refresh,
-                hour=self._daily_update_time.hour,
-                minute=self._daily_update_time.minute,
-                second=self._daily_update_time.second,
-            ),
+        # The entity is registered first. Its initial network request must not
+        # count toward the Home Assistant bootstrap task timeout.
+        task = self.hass.async_create_background_task(
+            self.async_update_ha_state(force_refresh=True),
+            f"Feedparser initial refresh {self.entity_id}",
+            eager_start=False,
         )
+
+        def cancel_initial_refresh() -> None:
+            task.cancel()
+
+        self.async_on_remove(cancel_initial_refresh)
 
     async def _async_daily_refresh(self: FeedParserSensor, _now: datetime) -> None:
         """Refresh the feed at the configured local wall-clock time."""
@@ -257,12 +268,20 @@ class FeedParserSensor(SensorEntity):
     def update(self: FeedParserSensor) -> None:
         """Parse the feed and update the state of the sensor."""
         _LOGGER.debug("Feed %s: Polling feed data from %s", self.name, self._feed)
-        s: requests.Session = requests.Session()
-        s.mount("file://", FileAdapter())
-        s.headers.update({"User-Agent": USER_AGENT})
-        res: requests.Response = s.get(self._feed)
-        res.raise_for_status()
-        parsed_feed = cast("ParsedFeed", feedparser.parse(res.text))
+        try:
+            with requests.Session() as session:
+                session.mount("file://", FileAdapter())
+                session.headers.update({"User-Agent": USER_AGENT})
+                res: requests.Response = session.get(self._feed, timeout=(5, 10))
+                res.raise_for_status()
+                parsed_feed = cast("ParsedFeed", feedparser.parse(res.text))
+        except requests.RequestException as exc:
+            _LOGGER.warning(
+                "Feed %s: Fetch failed (%s); keeping existing entries",
+                self.name,
+                type(exc).__name__,
+            )
+            return
 
         if not parsed_feed.entries:
             self._attr_native_value = None

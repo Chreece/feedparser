@@ -1,16 +1,22 @@
 """Tests the feedparser sensor."""
 
+import asyncio
 import re
+from collections.abc import Coroutine
 from contextlib import nullcontext, suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from unittest.mock import Mock
 
 import feedparser
 import pytest
+import requests
 from constants import DATE_FORMAT, URLS_HEADERS_REQUIRED
 from feedsource import FeedSource
+from homeassistant.components.sensor import SensorEntity
 
+from custom_components.feedparser import sensor as feedparser_module
 from custom_components.feedparser.sensor import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_THUMBNAIL,
@@ -293,3 +299,75 @@ def test_without_daily_update_time_keeps_interval_polling(feed: FeedSource) -> N
     """Test interval polling remains the default."""
     sensor = FeedParserSensor(**feed.sensor_config_local_feed)
     assert sensor.should_poll is True
+
+
+def test_fetch_timeout_preserves_sensor_data(
+    feed_sensor: FeedParserSensor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stalled feed times out without destroying its last good snapshot."""
+    feed_sensor.update()
+    entries_before = feed_sensor.feed_entries
+    count_before = feed_sensor.native_value
+    calls: list[object] = []
+
+    def raise_timeout(
+        _session: requests.Session,
+        _url: str,
+        **kwargs: object,
+    ) -> requests.Response:
+        calls.append(kwargs.get("timeout"))
+        message = "Synthetic RSS timeout"
+        raise requests.exceptions.Timeout(message)
+
+    monkeypatch.setattr(requests.Session, "get", raise_timeout)
+    feed_sensor.update()
+
+    assert calls == [(5, 10)]
+    assert feed_sensor.feed_entries is entries_before
+    assert feed_sensor.native_value == count_before
+
+
+@pytest.mark.parametrize("daily_time", [None, "06:30:00"])
+def test_initial_refresh_uses_background_task(
+    feed_sensor: FeedParserSensor,
+    monkeypatch: pytest.MonkeyPatch,
+    daily_time: str | None,
+) -> None:
+    """Initial fetch never blocks entity setup, including daily-only feeds."""
+    if daily_time is not None:
+        feed_sensor.configure_daily_update_time(daily_time)
+
+    calls: list[tuple[str, bool]] = []
+    cleanup_callbacks: list[object] = []
+    background_task = Mock()
+
+    def create_background_task(
+        coro: Coroutine[Any, Any, None],
+        name: str,
+        *,
+        eager_start: bool,
+    ) -> Mock:
+        calls.append((name, eager_start))
+        coro.close()
+        return background_task
+
+    async def fake_base_added_to_hass(_self: SensorEntity) -> None:
+        return None
+
+    feed_sensor.hass = Mock()
+    feed_sensor.entity_id = "sensor.feedparser_test"
+    feed_sensor.hass.async_create_background_task.side_effect = create_background_task
+    monkeypatch.setattr(SensorEntity, "async_added_to_hass", fake_base_added_to_hass)
+    monkeypatch.setattr(feed_sensor, "async_on_remove", cleanup_callbacks.append)
+    monkeypatch.setattr(
+        feedparser_module,
+        "async_track_time_change",
+        lambda *_args, **_kwargs: lambda: None,
+    )
+
+    asyncio.run(feed_sensor.async_added_to_hass())
+
+    assert calls == [("Feedparser initial refresh sensor.feedparser_test", False)]
+    assert background_task.cancel in cleanup_callbacks
+    assert len(cleanup_callbacks) == (2 if daily_time else 1)
