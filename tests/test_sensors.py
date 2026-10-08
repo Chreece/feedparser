@@ -316,7 +316,8 @@ def test_fetch_timeout_preserves_sensor_data(
         **kwargs: object,
     ) -> requests.Response:
         calls.append(kwargs.get("timeout"))
-        raise requests.exceptions.Timeout("Synthetic RSS timeout")
+        message = "Synthetic RSS timeout"
+        raise requests.exceptions.Timeout(message)
 
     monkeypatch.setattr(requests.Session, "get", raise_timeout)
     feed_sensor.update()
