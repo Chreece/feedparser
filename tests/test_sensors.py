@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from collections.abc import Coroutine
 from unittest.mock import Mock
 
 import requests
@@ -10,7 +11,7 @@ from datetime import UTC, datetime
 
 from homeassistant.components.sensor import SensorEntity
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import feedparser
 import pytest
@@ -342,7 +343,7 @@ def test_initial_refresh_uses_background_task(
     background_task = Mock()
 
     def create_background_task(
-        coro: object,
+        coro: Coroutine[Any, Any, None],
         name: str,
         *,
         eager_start: bool,
