@@ -357,9 +357,7 @@ def test_initial_refresh_uses_background_task(
 
     feed_sensor.hass = Mock()
     feed_sensor.entity_id = "sensor.feedparser_test"
-    feed_sensor.hass.async_create_background_task.side_effect = (
-        create_background_task
-    )
+    feed_sensor.hass.async_create_background_task.side_effect = create_background_task
     monkeypatch.setattr(SensorEntity, "async_added_to_hass", fake_base_added_to_hass)
     monkeypatch.setattr(feed_sensor, "async_on_remove", cleanup_callbacks.append)
     monkeypatch.setattr(
