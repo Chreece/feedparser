@@ -3,20 +3,18 @@
 import asyncio
 import re
 from collections.abc import Coroutine
-from unittest.mock import Mock
-
-import requests
 from contextlib import nullcontext, suppress
 from datetime import UTC, datetime
-
-from homeassistant.components.sensor import SensorEntity
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from unittest.mock import Mock
 
 import feedparser
 import pytest
+import requests
 from constants import DATE_FORMAT, URLS_HEADERS_REQUIRED
 from feedsource import FeedSource
+from homeassistant.components.sensor import SensorEntity
 
 from custom_components.feedparser import sensor as feedparser_module
 from custom_components.feedparser.sensor import (
