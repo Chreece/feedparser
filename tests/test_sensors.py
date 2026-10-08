@@ -300,6 +300,7 @@ def test_without_daily_update_time_keeps_interval_polling(feed: FeedSource) -> N
     sensor = FeedParserSensor(**feed.sensor_config_local_feed)
     assert sensor.should_poll is True
 
+
 def test_fetch_timeout_preserves_sensor_data(
     feed_sensor: FeedParserSensor,
     monkeypatch: pytest.MonkeyPatch,
