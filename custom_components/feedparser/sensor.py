@@ -255,7 +255,10 @@ class FeedParserSensor(SensorEntity):
             f"Feedparser initial refresh {self.entity_id}",
             eager_start=False,
         )
-        self.async_on_remove(task.cancel)
+        def cancel_initial_refresh() -> None:
+            task.cancel()
+
+        self.async_on_remove(cancel_initial_refresh)
 
     async def _async_daily_refresh(self: FeedParserSensor, _now: datetime) -> None:
         """Refresh the feed at the configured local wall-clock time."""
