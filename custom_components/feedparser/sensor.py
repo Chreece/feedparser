@@ -255,6 +255,7 @@ class FeedParserSensor(SensorEntity):
             f"Feedparser initial refresh {self.entity_id}",
             eager_start=False,
         )
+
         def cancel_initial_refresh() -> None:
             task.cancel()
 
